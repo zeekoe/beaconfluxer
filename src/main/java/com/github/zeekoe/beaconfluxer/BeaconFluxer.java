@@ -341,7 +341,8 @@ public class BeaconFluxer {
 
             lock.lock();
             try {
-                cv.await(30, TimeUnit.SECONDS);
+                System.out.println("Waiting for next read...");
+                cv.await(10, TimeUnit.MINUTES);
             } finally {
                 lock.unlock();
             }
