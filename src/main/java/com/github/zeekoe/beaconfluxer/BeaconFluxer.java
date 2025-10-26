@@ -3,12 +3,16 @@ package com.github.zeekoe.beaconfluxer;
 import org.influxdb.dto.Point;
 import tinyb.*;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -115,6 +119,75 @@ public class BeaconFluxer {
         return data;
     }
 
+    static final class Beacon {
+        private final String name;
+        private final String address;
+        private BluetoothDevice bluetoothDevice;
+        private BluetoothGattCharacteristic rx;
+        private BluetoothGattCharacteristic tx;
+
+        Beacon(String name, String address) {
+            this.name = name;
+            this.address = address;
+        }
+
+        public String name() {
+            return name;
+        }
+
+        public String address() {
+            return address;
+        }
+
+        public BluetoothDevice bluetoothDevice() {
+            return bluetoothDevice;
+        }
+
+        public void setBluetoothDevice(BluetoothDevice bluetoothDevice) {
+            this.bluetoothDevice = bluetoothDevice;
+        }
+
+        public BluetoothGattCharacteristic getRx() {
+            return rx;
+        }
+
+        public void setRx(BluetoothGattCharacteristic rx) {
+            this.rx = rx;
+        }
+
+        public BluetoothGattCharacteristic getTx() {
+            return tx;
+        }
+
+        public void setTx(BluetoothGattCharacteristic tx) {
+            this.tx = tx;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == this) return true;
+            if (obj == null || obj.getClass() != this.getClass()) return false;
+            var that = (Beacon) obj;
+            return Objects.equals(this.name, that.name) &&
+                    Objects.equals(this.address, that.address) &&
+                    Objects.equals(this.bluetoothDevice, that.bluetoothDevice);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, address, bluetoothDevice);
+        }
+
+        @Override
+        public String toString() {
+            return "Beacon[" +
+                    "name=" + name + ", " +
+                    "address=" + address + ", " +
+                    "bluetoothDevice=" + bluetoothDevice + ']';
+        }
+
+        }
+
     /*
      * This program connects to a WS08 ThermoBeacon and reads the temperature characteristic exposed by the device over
      * Bluetooth Low Energy. The parameter provided to the program should be the MAC address of the device.
@@ -124,11 +197,7 @@ public class BeaconFluxer {
      */
     public static void main(String[] args) throws InterruptedException {
         Influx influx = new Influx();
-
-        if (args.length < 1) {
-            System.err.println("Run with <device_address> argument");
-            System.exit(-1);
-        }
+        List<Beacon> beacons = loadBeacons();
 
         /*
          * To start looking of the device, we first must initialize the TinyB library. The way of interacting with the
@@ -142,33 +211,37 @@ public class BeaconFluxer {
          * discovery we can call startDiscovery, which will put the default adapter in discovery mode.
          */
         boolean discoveryStarted = manager.startDiscovery();
-
         System.out.println("The discovery started: " + (discoveryStarted ? "true" : "false"));
-        BluetoothDevice sensor = getDevice(args[0]);
 
-        /*
-         * After we find the device we can stop looking for other devices.
-         */
-        try {
-            manager.stopDiscovery();
-        } catch (BluetoothException e) {
-            System.err.println("Discovery could not be stopped.");
+        for (Beacon beacon : beacons) {
+            BluetoothDevice sensor = getDevice(beacon.address());
+
+            /*
+             * After we find the device we can stop looking for other devices.
+             */
+            try {
+                manager.stopDiscovery();
+            } catch (BluetoothException e) {
+                System.err.println("Discovery could not be stopped.");
+            }
+
+            if (sensor == null) {
+                System.err.println("No sensor found with the provided address.");
+                System.exit(-1);
+            }
+
+            System.out.print("Found device: ");
+            printDevice(sensor);
+
+            if (sensor.connect())
+                System.out.println("Sensor with the provided address connected");
+            else {
+                System.out.println("Could not connect device.");
+                System.exit(-1);
+            }
+            beacon.setBluetoothDevice(sensor);
         }
 
-        if (sensor == null) {
-            System.err.println("No sensor found with the provided address.");
-            System.exit(-1);
-        }
-
-        System.out.print("Found device: ");
-        printDevice(sensor);
-
-        if (sensor.connect())
-            System.out.println("Sensor with the provided address connected");
-        else {
-            System.out.println("Could not connect device.");
-            System.exit(-1);
-        }
 
         Lock lock = new ReentrantLock();
         Condition cv = lock.newCondition();
@@ -187,25 +260,31 @@ public class BeaconFluxer {
         });
 
 
-        BluetoothGattService tempService = getService(sensor, "0000ffe0-0000-1000-8000-00805f9b34fb");
+        for (Beacon beacon : beacons) {
+            BluetoothDevice sensor = beacon.bluetoothDevice();
+            BluetoothGattService tempService = getService(sensor, "0000ffe0-0000-1000-8000-00805f9b34fb");
 
-        if (tempService == null) {
-            System.err.println("This device does not have the temperature service we are looking for.");
-            sensor.disconnect();
-            System.exit(-1);
+            if (tempService == null) {
+                System.err.println("This device does not have the temperature service we are looking for.");
+                sensor.disconnect();
+                System.exit(-1);
+            }
+            System.out.println("Found service " + tempService.getUUID());
+
+            BluetoothGattCharacteristic rx = getCharacteristic(tempService, "0000fff3-0000-1000-8000-00805f9b34fb");
+            BluetoothGattCharacteristic tx = getCharacteristic(tempService, "0000fff5-0000-1000-8000-00805f9b34fb");
+
+            if (rx == null || tx == null) {
+                System.err.println("Could not find the correct characteristics.");
+                sensor.disconnect();
+                System.exit(-1);
+            }
+            beacon.setRx(rx);
+            beacon.setTx(tx);
+
+            System.out.println("Found the temperature characteristics");
         }
-        System.out.println("Found service " + tempService.getUUID());
 
-        BluetoothGattCharacteristic rx = getCharacteristic(tempService, "0000fff3-0000-1000-8000-00805f9b34fb");
-        BluetoothGattCharacteristic tx = getCharacteristic(tempService, "0000fff5-0000-1000-8000-00805f9b34fb");
-
-        if (rx == null || tx == null) {
-            System.err.println("Could not find the correct characteristics.");
-            sensor.disconnect();
-            System.exit(-1);
-        }
-
-        System.out.println("Found the temperature characteristics");
 
         /*
          * Turn on the Temperature Service by writing 1 in the configuration characteristic, as mentioned in the PDF
@@ -217,39 +296,46 @@ public class BeaconFluxer {
          * Each second read the value characteristic and display it in a human readable format.
          */
         while (running) {
-            // Send initial command to get the number of available data points
-            byte[] response = writeBytes(tx, rx, "0100000000");
-            // The number of available values is stored in the second and third bytes of the response, little endian order
-            int available = ((response[2] & 0xFF) << 8) | (response[1] & 0xFF);
+            for (Beacon beacon : beacons) {
+                BluetoothGattCharacteristic rx = beacon.getRx();
+                BluetoothGattCharacteristic tx = beacon.getTx();
 
-            System.out.println("There are " + available + " available data points from this device (" + sensor.getAddress() + ")");
+                // Send initial command to get the number of available data points
+                byte[] response = writeBytes(tx, rx, "0100000000");
+                // The number of available values is stored in the second and third bytes of the response, little endian order
+                int available = ((response[2] & 0xFF) << 8) | (response[1] & 0xFF);
 
-            try {
-                // Data is returned as three pairs of temperature and humidity values
-                int index = available - 1;
-                // Convert index to hex, padded with leading zeroes
-                String indexHex = String.format("%04x", index);
-                // Reverse the byte order of the hex values
-                String indexHexReversed = indexHex.substring(2) + indexHex.substring(0, 2);
-                // Build the request string to be sent to the device
-                String hexString = "07" + indexHexReversed + "000003";
-                // Send the request and get the response
-                response = writeBytes(tx, rx, hexString);
-                // Print the response as text
-                // Convert the response to temperature and humidity readings
-                Reading reading = convertToReadings(response);
+                System.out.println("There are " + available + " available data points from this device (" + sensor.getAddress() + ")");
 
-                influx.writePoint(Point
-                        .measurement("airdata")
-                        .time(LocalDateTime.now().atZone(ZoneId.systemDefault()).toEpochSecond(), TimeUnit.SECONDS)
-                        .addField("t_woonkamer", reading.temperature.doubleValue())
-                        .addField("h_woonkamer", reading.humidity.doubleValue())
-                        .build());
+                try {
+                    // Data is returned as three pairs of temperature and humidity values
+                    int index = available - 1;
+                    // Convert index to hex, padded with leading zeroes
+                    String indexHex = String.format("%04x", index);
+                    // Reverse the byte order of the hex values
+                    String indexHexReversed = indexHex.substring(2) + indexHex.substring(0, 2);
+                    // Build the request string to be sent to the device
+                    String hexString = "07" + indexHexReversed + "000003";
+                    // Send the request and get the response
+                    response = writeBytes(tx, rx, hexString);
+                    // Print the response as text
+                    // Convert the response to temperature and humidity readings
+                    Reading reading = convertToReadings(response);
 
-                System.out.println(reading);
-            } catch (Exception e) {
-                e.printStackTrace();
-                // Handle exception
+
+
+                    influx.writePoint(Point
+                            .measurement("airdata")
+                            .time(LocalDateTime.now().atZone(ZoneId.systemDefault()).toEpochSecond(), TimeUnit.SECONDS)
+                            .addField("t_" + beacon.name(), reading.temperature.doubleValue())
+                            .addField("h_" + beacon.name(), reading.humidity.doubleValue())
+                            .build());
+
+                    System.out.println(reading);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    // Handle exception
+                }
             }
 
 
@@ -260,8 +346,28 @@ public class BeaconFluxer {
                 lock.unlock();
             }
         }
-        sensor.disconnect();
+        for (Beacon beacon : beacons) {
+            beacon.bluetoothDevice().disconnect();
+        }
+    }
 
+    private static List<Beacon> loadBeacons() {
+        List<Beacon> beacons = new ArrayList<>();
+
+        Properties properties = new Properties();
+        try {
+            properties.load(new FileInputStream("/etc/papier.config"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        String thermobeacons = properties.getProperty("airdata.thermobeacon");
+        for (String beaconString : thermobeacons.split(";")) {
+            String[] parts = beaconString.split(",");
+            Beacon beacon = new Beacon(parts[0], parts[1]);
+            System.out.println(beacon);
+            beacons.add(beacon);
+        }
+        return beacons;
     }
 
 
