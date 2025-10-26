@@ -305,7 +305,7 @@ public class BeaconFluxer {
                 // The number of available values is stored in the second and third bytes of the response, little endian order
                 int available = ((response[2] & 0xFF) << 8) | (response[1] & 0xFF);
 
-                System.out.println("There are " + available + " available data points from this device (" + sensor.getAddress() + ")");
+                System.out.println("There are " + available + " available data points from this device (" + beacon.bluetoothDevice().getAddress() + ")");
 
                 try {
                     // Data is returned as three pairs of temperature and humidity values
