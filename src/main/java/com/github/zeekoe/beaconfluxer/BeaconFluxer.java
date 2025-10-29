@@ -131,8 +131,6 @@ public class BeaconFluxer {
             }
             beacon.setRx(rx);
             beacon.setTx(tx);
-
-            System.out.println("Found the temperature characteristics");
         }
     }
 
