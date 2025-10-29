@@ -73,12 +73,12 @@ public class BeaconFluxer {
                 }
             }
 
-            Point point = Point.measurement("airdata")
+            Point.Builder pointBuilder = Point.measurement("airdata")
                     .time(LocalDateTime.now().atZone(ZoneId.systemDefault()).toEpochSecond(), TimeUnit.SECONDS);
-            beaconReadings.forEach((key, value) -> point
+            beaconReadings.forEach((key, value) -> pointBuilder
                     .addField("t_" + key, value.temperature.doubleValue())
                     .addField("h_" + key, value.humidity.doubleValue()));
-            influx.writePoint(point.build());
+            influx.writePoint(pointBuilder.build());
 
             lock.lock();
             try {
