@@ -22,7 +22,7 @@ public class BluetoothUtil {
                 return null;
 
             for (BluetoothDevice device : list) {
-                printDevice(device);
+//                printDevice(device);
                 /*
                  * Here we check if the address matches.
                  */
@@ -106,7 +106,7 @@ public class BluetoothUtil {
         printDevice(sensor);
 
         if (sensor.connect())
-            System.out.println("Sensor with the provided address connected");
+            System.out.println("Sensor " + beacon.address() + " connected");
         else {
             System.out.println("Could not connect device.");
             return;
