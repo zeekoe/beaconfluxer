@@ -39,7 +39,7 @@ public class BluetoothUtil {
     }
 
     static BluetoothGattService getService(BluetoothDevice device, String UUID) throws InterruptedException {
-        System.out.println("Services exposed by device:");
+//        System.out.println("Services exposed by device:");
         BluetoothGattService tempService = null;
         List<BluetoothGattService> bluetoothServices = null;
         do {
@@ -48,7 +48,7 @@ public class BluetoothUtil {
                 return null;
 
             for (BluetoothGattService service : bluetoothServices) {
-                System.out.println("UUID: " + service.getUUID());
+//                System.out.println("UUID: " + service.getUUID());
                 if (service.getUUID().equals(UUID))
                     tempService = service;
             }
@@ -98,7 +98,8 @@ public class BluetoothUtil {
 
         if (sensor == null) {
             System.err.println("No sensor found with the provided address.");
-            System.exit(-1);
+            return;
+//            System.exit(-1);
         }
 
         System.out.print("Found device: ");
@@ -108,7 +109,8 @@ public class BluetoothUtil {
             System.out.println("Sensor with the provided address connected");
         else {
             System.out.println("Could not connect device.");
-            System.exit(-1);
+            return;
+//            System.exit(-1);
         }
         beacon.setBluetoothDevice(sensor);
     }

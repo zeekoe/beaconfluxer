@@ -67,8 +67,10 @@ public class BeaconFluxer {
                     beaconReadings.put(beacon.name(), reading);
 
                     System.out.println(reading);
-                } catch (Exception e) {
+                } catch (BluetoothException e) {
                     e.printStackTrace();
+                    // probably disconnected, try reconnecting
+                    BluetoothUtil.connect(beacon);
                     // Handle exception
                 }
             }
