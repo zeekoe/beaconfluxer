@@ -67,11 +67,13 @@ public class BeaconFluxer {
                     beaconReadings.put(beacon.name(), reading);
 
                     System.out.println(reading);
+
+                    if (beacon.getLastException() != null && beacon.getLastException().isAfter(LocalDateTime.now().minusMinutes(1))) {
+                        discoverAndConnectBeacons();
+                    }
                 } catch (BluetoothException e) {
                     e.printStackTrace();
-                    // probably disconnected, try reconnecting
-                    BluetoothUtil.connect(beacon);
-                    // Handle exception
+                    beacon.setLastException(LocalDateTime.now());
                 }
             }
 
@@ -142,7 +144,9 @@ public class BeaconFluxer {
         System.out.println("Discovery started: " + (discoveryStarted ? "true" : "false"));
 
         for (Beacon beacon : beacons) {
-            BluetoothUtil.connect(beacon);
+            if (beacon.bluetoothDevice() == null || !beacon.bluetoothDevice().getConnected()) {
+                BluetoothUtil.connect(beacon);
+            }
         }
 
         /*

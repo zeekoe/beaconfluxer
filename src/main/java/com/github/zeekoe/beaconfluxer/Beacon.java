@@ -3,6 +3,7 @@ package com.github.zeekoe.beaconfluxer;
 import tinyb.BluetoothDevice;
 import tinyb.BluetoothGattCharacteristic;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 final class Beacon {
@@ -11,6 +12,7 @@ final class Beacon {
   private BluetoothDevice bluetoothDevice;
   private BluetoothGattCharacteristic rx;
   private BluetoothGattCharacteristic tx;
+  private LocalDateTime lastException = null;
 
   Beacon(String name, String address) {
     this.name = name;
@@ -47,6 +49,14 @@ final class Beacon {
 
   public void setTx(BluetoothGattCharacteristic tx) {
     this.tx = tx;
+  }
+
+  public LocalDateTime getLastException() {
+    return lastException;
+  }
+
+  public void setLastException(LocalDateTime lastException) {
+    this.lastException = lastException;
   }
 
   @Override

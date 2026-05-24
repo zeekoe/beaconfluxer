@@ -1,10 +1,8 @@
 package com.github.zeekoe.beaconfluxer;
 
-import tinyb.BluetoothDevice;
-import tinyb.BluetoothGattCharacteristic;
-import tinyb.BluetoothGattService;
-import tinyb.BluetoothManager;
+import tinyb.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public class BluetoothUtil {
@@ -94,24 +92,29 @@ public class BluetoothUtil {
     }
 
     static void connect(Beacon beacon) throws InterruptedException {
-        BluetoothDevice sensor = getDevice(beacon.address());
+        try {
+            BluetoothDevice sensor = getDevice(beacon.address());
 
-        if (sensor == null) {
-            System.err.println("No sensor found with the provided address.");
-            return;
+            if (sensor == null) {
+                System.err.println("No sensor found with the provided address.");
+                return;
 //            System.exit(-1);
-        }
+            }
 
-        System.out.print("Found device: ");
-        printDevice(sensor);
+            System.out.print("Found device: ");
+            printDevice(sensor);
 
-        if (sensor.connect())
-            System.out.println("Sensor " + beacon.address() + " connected");
-        else {
-            System.out.println("Could not connect device.");
-            return;
+            if (sensor.connect())
+                System.out.println("Sensor " + beacon.address() + " connected");
+            else {
+                System.out.println("Could not connect device.");
+                return;
 //            System.exit(-1);
+            }
+            beacon.setBluetoothDevice(sensor);
+        } catch (BluetoothException e) {
+            System.out.println("Error connecting " + e);
+            beacon.setLastException(LocalDateTime.now());
         }
-        beacon.setBluetoothDevice(sensor);
     }
 }
