@@ -56,6 +56,14 @@ public class BeaconFluxer {
             Map<String, Reading> beaconReadings = new HashMap<>(beacons.size());
             for (Beacon beacon : beacons) {
                 try {
+                    if (beacon.getLastException() != null && beacon.getLastException().isAfter(LocalDateTime.now().minusMinutes(1))) {
+                        discoverAndConnectBeacons();
+                    }
+                } catch (BluetoothException e) {
+                    e.printStackTrace();
+                    beacon.setLastException(LocalDateTime.now());
+                }
+                try {
                     int availableTempAndHumidityValues = getAvailableValues(beacon);
                     System.out.println("There are " + availableTempAndHumidityValues + " available data points from this device (" + beacon.bluetoothDevice().getAddress() + ")");
 
@@ -67,10 +75,6 @@ public class BeaconFluxer {
                     beaconReadings.put(beacon.name(), reading);
 
                     System.out.println(reading);
-
-                    if (beacon.getLastException() != null && beacon.getLastException().isAfter(LocalDateTime.now().minusMinutes(1))) {
-                        discoverAndConnectBeacons();
-                    }
                 } catch (BluetoothException e) {
                     e.printStackTrace();
                     beacon.setLastException(LocalDateTime.now());
