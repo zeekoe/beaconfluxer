@@ -76,10 +76,14 @@ final class Beacon {
 
   @Override
   public String toString() {
-    return "Beacon[" +
-        "name=" + name + ", " +
-        "address=" + address + ", " +
-        "bluetoothDevice=" + bluetoothDevice + ']';
+    String str = "Beacon[" +
+            "name=" + name + ", " +
+            "address=" + address + ", " +
+            "bluetoothDevice=" + bluetoothDevice;
+    if (lastException != null) {
+      str += ", " + lastException;
+    }
+    return str + ']';
   }
 
 }

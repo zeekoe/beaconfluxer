@@ -50,14 +50,16 @@ public class BeaconFluxer {
         cv = lock.newCondition();
 
         addShutdownHook();
-        fillBeacons();
 
         while (running) {
             Map<String, Reading> beaconReadings = new HashMap<>(beacons.size());
             for (Beacon beacon : beacons) {
+                System.out.println(beacon);
                 try {
                     if (beacon.getLastException() != null && beacon.getLastException().isAfter(LocalDateTime.now().minusMinutes(1))) {
-                        discoverAndConnectBeacons();
+                        beacon.setLastException(null);
+                        System.out.println("Starting reconnect");
+                        connectAndFill(beacon);
                     }
                 } catch (BluetoothException e) {
                     e.printStackTrace();
@@ -65,7 +67,7 @@ public class BeaconFluxer {
                 }
                 try {
                     int availableTempAndHumidityValues = getAvailableValues(beacon);
-                    System.out.println("There are " + availableTempAndHumidityValues + " available data points from this device (" + beacon.bluetoothDevice().getAddress() + ")");
+                    System.out.println("There are " + availableTempAndHumidityValues + " available data points from this device (" + beacon.bluetoothDevice().getName() + ")");
 
                     String request = buildGetLastValueRequest(availableTempAndHumidityValues);
                     byte[] response = BluetoothUtil.writeBytes(beacon.getTx(), beacon.getRx(), request);
@@ -117,29 +119,27 @@ public class BeaconFluxer {
         return "07" + indexHexReversed + "000003";
     }
 
-    private void fillBeacons() throws InterruptedException {
-        for (Beacon beacon : beacons) {
-            BluetoothDevice sensor = beacon.bluetoothDevice();
-            BluetoothGattService tempService = BluetoothUtil.getService(sensor, "0000ffe0-0000-1000-8000-00805f9b34fb");
+    private static void fillBeacon(Beacon beacon) throws InterruptedException {
+        BluetoothDevice sensor = beacon.bluetoothDevice();
+        BluetoothGattService tempService = BluetoothUtil.getService(sensor, "0000ffe0-0000-1000-8000-00805f9b34fb");
 
-            if (tempService == null) {
-                System.err.println("This device does not have the temperature service we are looking for.");
-                sensor.disconnect();
-                System.exit(-1);
-            }
-            System.out.println("Found service " + tempService.getUUID());
-
-            BluetoothGattCharacteristic rx = BluetoothUtil.getCharacteristic(tempService, "0000fff3-0000-1000-8000-00805f9b34fb");
-            BluetoothGattCharacteristic tx = BluetoothUtil.getCharacteristic(tempService, "0000fff5-0000-1000-8000-00805f9b34fb");
-
-            if (rx == null || tx == null) {
-                System.err.println("Could not find the correct characteristics.");
-                sensor.disconnect();
-                System.exit(-1);
-            }
-            beacon.setRx(rx);
-            beacon.setTx(tx);
+        if (tempService == null) {
+            System.err.println("This device does not have the temperature service we are looking for.");
+            sensor.disconnect();
+            System.exit(-1);
         }
+        System.out.println("Found service " + tempService.getUUID());
+
+        BluetoothGattCharacteristic rx = BluetoothUtil.getCharacteristic(tempService, "0000fff3-0000-1000-8000-00805f9b34fb");
+        BluetoothGattCharacteristic tx = BluetoothUtil.getCharacteristic(tempService, "0000fff5-0000-1000-8000-00805f9b34fb");
+
+        if (rx == null || tx == null) {
+            System.err.println("Could not find the correct characteristics.");
+            sensor.disconnect();
+            System.exit(-1);
+        }
+        beacon.setRx(rx);
+        beacon.setTx(tx);
     }
 
     private void discoverAndConnectBeacons() throws InterruptedException {
@@ -149,7 +149,12 @@ public class BeaconFluxer {
 
         for (Beacon beacon : beacons) {
             if (beacon.bluetoothDevice() == null || !beacon.bluetoothDevice().getConnected()) {
-                BluetoothUtil.connect(beacon);
+                try {
+                    connectAndFill(beacon);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    beacon.setLastException(LocalDateTime.now());
+                }
             }
         }
 
@@ -161,6 +166,11 @@ public class BeaconFluxer {
         } catch (BluetoothException e) {
             System.err.println("Discovery could not be stopped.");
         }
+    }
+
+    private static void connectAndFill(Beacon beacon) throws InterruptedException {
+        BluetoothUtil.connect(beacon);
+        fillBeacon(beacon);
     }
 
     private void addShutdownHook() {
