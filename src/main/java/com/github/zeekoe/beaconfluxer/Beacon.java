@@ -12,7 +12,6 @@ final class Beacon {
   private BluetoothDevice bluetoothDevice;
   private BluetoothGattCharacteristic rx;
   private BluetoothGattCharacteristic tx;
-  private LocalDateTime lastException = null;
 
   Beacon(String name, String address) {
     this.name = name;
@@ -51,14 +50,6 @@ final class Beacon {
     this.tx = tx;
   }
 
-  public LocalDateTime getLastException() {
-    return lastException;
-  }
-
-  public void setLastException(LocalDateTime lastException) {
-    this.lastException = lastException;
-  }
-
   @Override
   public boolean equals(Object obj) {
     if (obj == this) return true;
@@ -76,14 +67,10 @@ final class Beacon {
 
   @Override
   public String toString() {
-    String str = "Beacon[" +
-            "name=" + name + ", " +
-            "address=" + address + ", " +
-            "bluetoothDevice=" + bluetoothDevice;
-    if (lastException != null) {
-      str += ", " + lastException;
-    }
-    return str + ']';
+      return "Beacon[" +
+              "name=" + name + ", " +
+              "address=" + address + ", " +
+              "bluetoothDevice=" + bluetoothDevice + ']';
   }
 
 }

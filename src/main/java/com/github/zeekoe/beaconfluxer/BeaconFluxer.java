@@ -56,18 +56,16 @@ public class BeaconFluxer {
             for (Beacon beacon : beacons) {
                 System.out.println(beacon);
                 try {
-                    if (beacon.getLastException() != null && beacon.getLastException().isAfter(LocalDateTime.now().minusMinutes(1))) {
-                        beacon.setLastException(null);
+                    if (beacon.bluetoothDevice() == null) {
                         System.out.println("Starting reconnect");
                         connectAndFill(beacon);
                     }
                 } catch (BluetoothException e) {
                     e.printStackTrace();
-                    beacon.setLastException(LocalDateTime.now());
                 }
                 try {
                     int availableTempAndHumidityValues = getAvailableValues(beacon);
-                    System.out.println("There are " + availableTempAndHumidityValues + " available data points from this device (" + beacon.bluetoothDevice().getName() + ")");
+                    System.out.println("There are " + availableTempAndHumidityValues + " available data points from this device (" + beacon.name() + ")");
 
                     String request = buildGetLastValueRequest(availableTempAndHumidityValues);
                     byte[] response = BluetoothUtil.writeBytes(beacon.getTx(), beacon.getRx(), request);
@@ -78,8 +76,10 @@ public class BeaconFluxer {
 
                     System.out.println(reading);
                 } catch (BluetoothException e) {
+                    beacon.setBluetoothDevice(null);
+                    beacon.setTx(null);
+                    beacon.setRx(null);
                     e.printStackTrace();
-                    beacon.setLastException(LocalDateTime.now());
                 }
             }
 
@@ -97,10 +97,6 @@ public class BeaconFluxer {
             } finally {
                 lock.unlock();
             }
-        }
-
-        for (Beacon beacon : beacons) {
-            beacon.bluetoothDevice().disconnect();
         }
     }
 
@@ -183,7 +179,6 @@ public class BeaconFluxer {
                 } finally {
                     lock.unlock();
                 }
-
             }
         });
     }
