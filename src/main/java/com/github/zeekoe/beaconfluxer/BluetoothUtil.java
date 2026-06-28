@@ -114,7 +114,6 @@ public class BluetoothUtil {
             beacon.setBluetoothDevice(sensor);
         } catch (BluetoothException e) {
             System.out.println("Error connecting " + e);
-            beacon.setLastException(LocalDateTime.now());
         }
     }
 }
