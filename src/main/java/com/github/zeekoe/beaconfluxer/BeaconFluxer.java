@@ -149,7 +149,6 @@ public class BeaconFluxer {
                     connectAndFill(beacon);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    beacon.setLastException(LocalDateTime.now());
                 }
             }
         }
