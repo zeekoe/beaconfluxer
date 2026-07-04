@@ -10,16 +10,14 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
+
+import static com.github.zeekoe.beaconfluxer.StringUtil.padLeft;
 
 /* WS08 python source used:
 https://github.com/rnlgreen/thermobeacon/blob/main/thermobeacon2.py
@@ -44,6 +42,12 @@ public class BeaconFluxer {
         Influx influx = new Influx();
         beacons = loadBeacons();
 
+        int maxNameLength = beacons.stream()
+                .map(Beacon::name)
+                .map(String::length)
+                .max(Comparator.naturalOrder())
+                .orElse(0);
+
         discoverAndConnectBeacons();
 
         lock = new ReentrantLock();
@@ -54,18 +58,17 @@ public class BeaconFluxer {
         while (running) {
             Map<String, Reading> beaconReadings = new HashMap<>(beacons.size());
             for (Beacon beacon : beacons) {
-                System.out.println(beacon);
                 try {
                     if (beacon.bluetoothDevice() == null) {
                         System.out.println("Starting reconnect");
                         connectAndFill(beacon);
                     }
-                } catch (BluetoothException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
                 try {
                     int availableTempAndHumidityValues = getAvailableValues(beacon);
-                    System.out.println("There are " + availableTempAndHumidityValues + " available data points from this device (" + beacon.name() + ")");
+                    System.out.print(padLeft(beacon.name(), maxNameLength) + " - " + beacon.address() + " - " + padLeft("" + availableTempAndHumidityValues, 5) + " data points. ");
 
                     String request = buildGetLastValueRequest(availableTempAndHumidityValues);
                     byte[] response = BluetoothUtil.writeBytes(beacon.getTx(), beacon.getRx(), request);
@@ -75,7 +78,7 @@ public class BeaconFluxer {
                     beaconReadings.put(beacon.name(), reading);
 
                     System.out.println(reading);
-                } catch (BluetoothException e) {
+                } catch (Exception e) {
                     beacon.setBluetoothDevice(null);
                     beacon.setTx(null);
                     beacon.setRx(null);
@@ -189,10 +192,10 @@ public class BeaconFluxer {
         try {
             properties.load(new FileInputStream("/etc/papier.config"));
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-        String thermobeacons = properties.getProperty("airdata.thermobeacon");
-        for (String beaconString : thermobeacons.split(";")) {
+        String thermoBeacons = properties.getProperty("airdata.thermobeacon");
+        for (String beaconString : thermoBeacons.split(";")) {
             String[] parts = beaconString.split(",");
             Beacon beacon = new Beacon(parts[0], parts[1]);
             System.out.println(beacon);
@@ -214,10 +217,10 @@ public class BeaconFluxer {
             }
             readings.add(BigDecimal.valueOf(reading).setScale(2, RoundingMode.HALF_UP));
         }
-        System.out.println(readings.stream().map(r -> r.toString()).collect(Collectors.joining(", ")));
+//        System.out.println(readings.stream().map(r -> r.toString()).collect(Collectors.joining(", ")));
         return new Reading(readings.get(0), readings.get(3));
     }
 
-    record Reading(BigDecimal temperature, BigDecimal humidity) {
+    public record Reading(BigDecimal temperature, BigDecimal humidity) {
     }
 }
